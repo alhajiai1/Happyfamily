@@ -1,92 +1,96 @@
 const express = require('express');
-const nodemailer = require('nodemailer');
 const cors = require('cors');
 const path = require('path');
+const nodemailer = require('nodemailer');
+const db = require('./database');
 
 const app = express();
-app.use(express.json());
-app.use(cors());
-
-// Temporary in-memory storage for OTPs
-const otpStorage = {};
-
-// Nodemailer configuration with your explicit app password
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: 'abualhaji52@gmail.com',
-    pass: 'zytsvaansupcvf'
-  }
-});
-
-// Serve the frontend index.html file directly from the backend root
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Registration endpoint with strict validations for Email, Phone, and Ghana Card
-app.post('/api/register', async (req, res) => {
-  const { name, email, phone, ghanaCard } = req.body;
-
-  if (!name || !email || !phone || !ghanaCard) {
-    return res.status(400).json({ success: false, message: 'All fields are required.' });
-  }
-
-  // 1. Email Validation Check
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return res.status(400).json({ success: false, message: 'Invalid email address format.' });
-  }
-
-  // 2. Ghanaian Phone Number Validation Check (Accepts 0XXXXXXXXX or +233XXXXXXXXX)
-  const phoneRegex = /^(?:(?:\+233|0)[2-57-9][0-9]{8})$/;
-  if (!phoneRegex.test(phone)) {
-    return res.status(400).json({ success: false, message: 'Invalid phone number format. Use local (0241234567) or international (+233241234567).' });
-  }
-
-  // 3. Ghana Card Validation Check (GHA-XXXXXXXXX-X)
-  const ghanaCardRegex = /^GHA-[0-9]{9}-[0-9]$/;
-  if (!ghanaCardRegex.test(ghanaCard)) {
-    return res.status(400).json({ success: false, message: 'Invalid Ghana Card format. Use GHA-XXXXXXXXX-X.' });
-  }
-
-  // Generate a 6-digit OTP
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  otpStorage[email] = otp;
-
-  const mailOptions = {
-    from: 'abualhaji52@gmail.com',
-    to: email,
-    subject: 'Happy Family - Verification Code',
-    text: `Hello ${name},\n\nYour verification code is: ${otp}\n\nThank you for registering!`
-  };
-
-  try {
-    await transporter.sendMail(mailOptions);
-    res.status(200).json({ success: true, message: 'OTP sent successfully!' });
-  } catch (error) {
-    console.error('Nodemailer error:', error);
-    res.status(500).json({ success: false, message: 'Failed to send email. Check your app password.' });
-  }
-});
-
-// Verification endpoint
-app.post('/api/verify-otp', (req, res) => {
-  const { email, otp } = req.body;
-
-  if (!email || !otp) {
-    return res.status(400).json({ success: false, message: 'Email and OTP are required.' });
-  }
-
-  if (otpStorage[email] && otpStorage[email] === otp) {
-    delete otpStorage[email];
-    return res.status(200).json({ success: true, message: 'OTP verified successfully! Welcome to Happy Family.' });
-  } else {
-    return res.status(400).json({ success: false, message: 'Invalid or expired OTP code.' });
-  }
-});
-
 const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Serve static frontend files from the same directory
+app.use(express.static(__dirname));
+
+// Root route to serve your index.html interface
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Configure Nodemailer transporter with your exact app password
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: 'abualhaji52@gmail.com',
+        pass: 'zyts vaan suag pcvf'
+    }
+});
+
+// Registration & OTP Generation Endpoint
+app.post('/api/register', (req, res) => {
+    const { name, email, phone, ghanaCard } = req.body;
+
+    if (!name || !email || !phone || !ghanaCard) {
+        return res.status(400).json({ error: 'All fields are required.' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const query = `INSERT INTO users (name, email, phone, ghanaCard, otp, verified) VALUES (?, ?, ?, ?, ?, 0) 
+                   ON CONFLICT(email) DO UPDATE SET otp=excluded.otp, name=excluded.name, phone=excluded.phone, ghanaCard=excluded.ghanaCard`;
+
+    db.run(query, [name, email, phone, ghanaCard, otp], function(err) {
+        if (err) {
+            console.error('Database Error:', err.message);
+            return res.status(500).json({ error: 'Database error occurred.' });
+        }
+
+        const mailOptions = {
+            from: 'abualhaji52@gmail.com',
+            to: email,
+            subject: 'Happy Family Store - Verification Code',
+            text: `Hello ${name},\n\nYour 6-digit verification code for Happy Family Store is: ${otp}\n\nThank you for shopping with us!`
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                console.error('Email Error:', error);
+                return res.status(500).json({ error: 'Failed to send verification email.' });
+            }
+            res.json({ message: 'Verification code sent successfully.' });
+        });
+    });
+});
+
+// OTP Verification Endpoint
+app.post('/api/verify-otp', (req, res) => {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+        return res.status(400).json({ error: 'Email and OTP are required.' });
+    }
+
+    db.get(`SELECT * FROM users WHERE email = ?`, [email], (err, user) => {
+        if (err || !user) {
+            return res.status(400).json({ error: 'User not found.' });
+        }
+
+        if (user.otp === otp) {
+            db.run(`UPDATE users SET verified = 1, otp = NULL WHERE email = ?`, [email], (updateErr) => {
+                if (updateErr) {
+                    return res.status(500).json({ error: 'Failed to update verification state.' });
+                }
+                res.json({ message: 'Verification successful!' });
+            });
+        } else {
+            res.status(400).json({ error: 'Invalid or expired verification code.' });
+        }
+    });
+});
+
+// Start Server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+    console.log(`Server is running live on port ${PORT}`);
 });
