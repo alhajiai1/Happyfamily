@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Happy Family - Secure Platform Access</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f6f8;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 400px;
+    }
+    h2 {
+      margin-bottom: 10px;
+      color: #333;
+      font-size: 22px;
+    }
+    p {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background-color: #218838;
+    }
+    .hidden {
+      display: none;
+    }
+    #loadingOverlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-family: Arial, sans-serif;
+      flex-direction: column;
+    }
+    .spinner {
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #28a745;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <!-- Registration Form Section -->
+    <div id="registerSection">
+      <h2>Happy Family - Access</h2>
+      <p>Enter your verified credentials to receive your email code.</p>
+      
+      <form id="registrationForm">
+        <div class="form-group">
+          <input type="text" id="name" placeholder="Full Name" required>
+        </div>
+        <div class="form-group">
+          <input type="email" id="email" placeholder="Email Address (e.g., user@gmail.com)" required>
+        </div>
+        <div class="form-group">
+          <input type="tel" id="phone" placeholder="Phone Number (e.g., 0241234567)" pattern="^(?:(?:\+233|0)[2-57-9][0-9]{8})$" title="Enter a valid Ghanaian phone number" required>
+        </div>
+        <div class="form-group">
+          <input type="text" id="ghanaCard" placeholder="Ghana Card (GHA-XXXXXXXXX-X)" pattern="^GHA-[0-9]{9}-[0-9]$" title="Format: GHA-XXXXXXXXX-X" required>
+        </div>
+        <button type="submit">Send Verification Code</button>
+      </form>
+    </div>
+
+    <!-- OTP Verification Section -->
+    <div id="verifySection" class="hidden">
+      <h2>Enter Verification Code</h2>
+      <p>We've sent a 6-digit code to your email address.</p>
+      
+      <form id="verifyForm">
+        <div class="form-group">
+          <input type="text" id="otpCode" placeholder="Enter 6-digit OTP" required maxlength="6">
+        </div>
+        <button type="submit">Verify Code</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <div class="spinner"></div>
+    <p style="margin-top: 15px; font-weight: bold; text-align: center; padding: 0 20px;">
+      Connecting to server, please wait (warming up free tier)...
+    </p>
+  </div>
+
+  <script>
+    let registeredEmail = '';
+
+    document.getElementById('registrationForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      registeredEmail = document.getElementById('email').value;
+      const userData = {
+        name: document.getElementById('name').value,
+        email: registeredEmail,
+        phone: document.getElementById('phone').value,
+        ghanaCard: document.getElementById('ghanaCard').value
+      };
+
+      document.getElementById('loadingOverlay').style.display = 'flex';
+
+      try {
+        const response = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(userData)
+        });
+
+        const data = await response.json();
+        
+        if (response.ok) {
+          alert('Verification code sent successfully to your email!');
+          document.getElementById('registerSection').classList.add('hidden');
+          document.getElementById('verifySection').classList.remove('hidden');
+        } else {
+          alert('Error: ' + (data.message || 'Something went wrong'));
+        }
+      } catch (error) {
+        console.error('Connection error:', error);
+        alert('Failed to connect to server. Please try again.');
+      } finally {
+        document.getElementById('loadingOverlay').style.display = 'none';
+      }
+    });
+
+    document.getElementById('verifyForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const otp = document.getElementById('otpCode').value;
+
+      document.getElementById('loadingOverlay').style.display = 'flex';
+
+      try {
+        const response = await fetch('/api/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: registeredEmail, otp })
+        });
+
+        const data = await response.json();
+        
+        if (response.ok) {
+          alert('Success! ' + data.message);
+          location.reload();
+        } else {
+          alert('Error: ' + (data.message || 'Invalid code'));
+        }
+      } catch (error) {
+        console.error('Verification error:', error);
+        alert('Failed to verify OTP. Please try again.');
+      } finally {
+        document.getElementById('loadingOverlay').style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>
