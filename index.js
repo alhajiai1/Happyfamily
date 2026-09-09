@@ -27,7 +27,12 @@ const transporter = nodemailer.createTransport({
         pass: 'zyts vaan suag pcvf'
     }
 });
+app.post('/api/register', (req, res) => {
+    const { name, email, phone, ghanaCard } = req.body;
 
+    if (!name || !email || !phone || !ghanaCard) {
+        return res.status(400).json({ error: 'All fields are required.' });
+    }
 // Registration & OTP Generation Endpoint
 app.post('/api/register', (req, res) => {
     const { name, email, phone, ghanaCard } = req.body;
@@ -38,14 +43,16 @@ app.post('/api/register', (req, res) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    const query = `INSERT INTO users (name, email, phone, ghanaCard, otp, verified) VALUES (?, ?, ?, ?, ?, 0)';
-                   ON CONFLICT(email) DO UPDATE SET otp=excluded.otp, name=excluded.name, phone=excluded.phone, ghanaCard=excluded.ghanaCard`;
+    const query = `INSERT INTO users (name, email, phone, ghanaCard, otp, verified) VALUES (?, ?, ?, ?, ?, 0)`;
 
     db.run(query, [name, email, phone, ghanaCard, otp], function(err) {
         if (err) {
             console.error('Database Error:', err.message);
             return res.status(500).json({ error: 'Database error occurred.' });
         }
+        res.json({ message: 'OTP sent successfully!' });
+    });
+});
 
         const mailOptions = {
             from: 'abualhaji52@gmail.com',
@@ -62,7 +69,6 @@ app.post('/api/register', (req, res) => {
             res.json({ message: 'Verification code sent successfully.' });
         });
     });
-});
 
 // OTP Verification Endpoint
 app.post('/api/verify-otp', (req, res) => {
