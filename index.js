@@ -38,7 +38,7 @@ app.post('/api/register', (req, res) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    const query = `INSERT INTO users (name, email, phone, ghanaCard, otp, verified) VALUES (?, ?, ?, ?, ?, 0) 
+    const query = `INSERT INTO users (name, email, phone, ghanaCard, otp, verified) VALUES (?, ?, ?, ?, ?, 0)';
                    ON CONFLICT(email) DO UPDATE SET otp=excluded.otp, name=excluded.name, phone=excluded.phone, ghanaCard=excluded.ghanaCard`;
 
     db.run(query, [name, email, phone, ghanaCard, otp], function(err) {
