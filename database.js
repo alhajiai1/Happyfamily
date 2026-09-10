@@ -12,7 +12,6 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 db.serialize(() => {
-    // Create base table if it doesn't exist
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
@@ -24,7 +23,6 @@ db.serialize(() => {
         }
     });
 
-    // Safely add any columns that might be missing from older schema versions
     const migrationQueries = [
         "ALTER TABLE users ADD COLUMN ghanaCard TEXT;",
         "ALTER TABLE users ADD COLUMN otp TEXT;",
@@ -33,7 +31,7 @@ db.serialize(() => {
 
     migrationQueries.forEach((query) => {
         db.run(query, (err) => {
-            // Silently ignore errors if the column already exists
+            // Silently ignore if column already exists
         });
     });
 
