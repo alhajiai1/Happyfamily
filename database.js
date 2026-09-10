@@ -16,26 +16,17 @@ db.serialize(() => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         email TEXT UNIQUE,
-        phone TEXT
+        phone TEXT,
+        ghanaCard TEXT,
+        otp TEXT,
+        verified INTEGER DEFAULT 0
     )`, (err) => {
         if (err) {
             console.error('Error creating base table:', err.message);
+        } else {
+            console.log('Users table verified/created with all columns.');
         }
     });
-
-    const migrationQueries = [
-        "ALTER TABLE users ADD COLUMN ghanaCard TEXT;",
-        "ALTER TABLE users ADD COLUMN otp TEXT;",
-        "ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0;"
-    ];
-
-    migrationQueries.forEach((query) => {
-        db.run(query, (err) => {
-            // Silently ignore if column already exists
-        });
-    });
-
-    console.log('Database schema verified and updated successfully.');
 });
 
 module.exports = db;
