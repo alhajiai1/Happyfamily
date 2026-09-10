@@ -8,26 +8,26 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Health check endpoint
 app.get('/', (req, res) => {
     res.send('HappyFamilyStore Backend is running successfully!');
 });
 
-// Secure Registration Endpoint
 app.post('/api/register', (req, res) => {
-    const { name, email, phone, ghanaCard } = req.body;
+    const name = req.body.name;
+    const email = req.body.email;
+    const phone = req.body.phone;
+    // Accept either property name so it never fails due to frontend/backend mismatch
+    const ghanaCard = req.body.ghanaCard || req.body.id_card;
 
-    // 1. Comprehensive input validation
     if (!name || !email || !phone || !ghanaCard) {
         return res.status(400).json({ error: 'All fields (name, email, phone, and Ghana Card) are required.' });
     }
 
-    // 2. Proactive check for existing unique identifiers to give clear user feedback
-    const checkQuery = `SELECT email, phone, ghanaCard FROM users WHERE email = ? OR phone = ? OR ghanaCard = ?`;
+    const checkQuery = `SELECT email, phone, id_card FROM users WHERE email = ? OR phone = ? OR id_card = ?`;
     db.get(checkQuery, [email, phone, ghanaCard], (err, existingUser) => {
         if (err) {
             console.error('Database Check Error:', err.message);
-            return res.status(500).json({ error: 'A server error occurred. Please try again.' });
+            return res.status(500).json({ error: `Database Error: ${err.message}` });
         }
 
         if (existingUser) {
@@ -37,23 +37,20 @@ app.post('/api/register', (req, res) => {
             if (existingUser.phone === phone) {
                 return res.status(400).json({ error: 'This phone number is already registered.' });
             }
-            if (existingUser.ghanaCard === ghanaCard) {
+            if (existingUser.id_card === ghanaCard) {
                 return res.status(400).json({ error: 'This Ghana Card ID is already registered.' });
             }
         }
 
-        // 3. Generate a secure 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // 4. Insert the new user safely
-        const insertQuery = `INSERT INTO users (name, email, phone, ghanaCard, otp, verified) VALUES (?, ?, ?, ?, ?, 0)`;
+        const insertQuery = `INSERT INTO users (name, email, phone, id_card, otp, verified) VALUES (?, ?, ?, ?, ?, 0)`;
         db.run(insertQuery, [name, email, phone, ghanaCard, otp], function(err) {
             if (err) {
                 console.error('Database Insert Error:', err.message);
-                return res.status(500).json({ error: 'Failed to create user account. Please try again.' });
+                return res.status(500).json({ error: `DB Insert Error: ${err.message}` });
             }
 
-            // Log OTP server-side for testing (ready for email service integration)
             console.log(`Generated OTP for ${email}: ${otp}`);
 
             return res.status(200).json({ 
@@ -64,7 +61,6 @@ app.post('/api/register', (req, res) => {
     });
 });
 
-// Secure OTP Verification Endpoint
 app.post('/api/verify', (req, res) => {
     const { email, otp } = req.body;
 
@@ -76,7 +72,7 @@ app.post('/api/verify', (req, res) => {
     db.get(query, [email], (err, user) => {
         if (err) {
             console.error('Database Verification Error:', err.message);
-            return res.status(500).json({ error: 'A server error occurred.' });
+            return res.status(500).json({ error: `Database Error: ${err.message}` });
         }
 
         if (!user) {
@@ -91,12 +87,11 @@ app.post('/api/verify', (req, res) => {
             return res.status(400).json({ error: 'Invalid verification code provided.' });
         }
 
-        // Update verification status and clear OTP
         const updateQuery = `UPDATE users SET verified = 1, otp = NULL WHERE email = ?`;
         db.run(updateQuery, [email], (updateErr) => {
             if (updateErr) {
                 console.error('Database Update Error:', updateErr.message);
-                return res.status(500).json({ error: 'Failed to verify account.' });
+                return res.status(500).json({ error: `Database Error: ${updateErr.message}` });
             }
 
             return res.status(200).json({ message: 'Account successfully verified!' });
