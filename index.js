@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const nodemailer = require('nodemailer');
 const db = require('./database');
 
 const app = express();
@@ -9,24 +8,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Configure Gmail transporter for Nodemailer
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
-});
-
 app.get('/', (req, res) => {
-    res.send('HappyFamilyStore Backend is running successfully!');
+    res.send('Backend is running successfully!');
 });
 
 app.post('/api/register', (req, res) => {
     const name = req.body.name;
     const email = req.body.email;
     const phone = req.body.phone;
-    // Accept either property name so it never fails due to frontend/backend mismatch
     const ghanaCard = req.body.ghanaCard || req.body.id_card;
 
     if (!name || !email || !phone || !ghanaCard) {
@@ -61,17 +50,30 @@ app.post('/api/register', (req, res) => {
                 return res.status(500).json({ error: `DB Insert Error: ${err.message}` });
             }
 
-            // Send actual email via Nodemailer
+            // --- SEND EMAIL VIA BREVO API ---
             try {
-                const mailOptions = {
-                    from: '"Happy Family Store" <no-reply@happyfamilystore.com>',
-                    to: email,
-                    subject: 'Your Happy Family Store Verification Code',
-                    text: `Hello ${name},\n\nYour 6-digit verification code is: ${otp}\n\nEnter this code on the website to complete your registration.\n\nThank you!`
-                };
+                const brevoResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+                    method: 'POST',
+                    headers: {
+                        'accept': 'application/json',
+                        'api-key': process.env.BREVO_API_KEY,
+                        'content-type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        sender: { name: "Store Verification", email: "alhajisbu951@gmail.com" },
+                        to: [{ email: email, name: name }],
+                        subject: "Your Verification Code",
+                        htmlContent: `<p>Hello ${name},</p><p>Your verification code is: <strong>${otp}</strong></p>`
+                    })
+                });
 
-                await transporter.sendMail(mailOptions);
-                console.log(`Verification email successfully sent to ${email}`);
+                const brevoResult = await brevoResponse.json();
+                console.log('Brevo Email Response:', brevoResult);
+
+                if (!brevoResponse.ok) {
+                    throw new Error(brevoResult.message || 'Failed to send email via Brevo');
+                }
+
             } catch (mailErr) {
                 console.error('Failed to send email:', mailErr.message);
                 return res.status(500).json({ error: 'Failed to dispatch verification email.' });
